@@ -17,6 +17,11 @@ data/
 logs/
 temp/
 
+# Log files
+*.log
+backend/backend.log
+frontend/frontend.log
+
 # Python
 __pycache__/
 *.py[cod]

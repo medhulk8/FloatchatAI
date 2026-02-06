@@ -37,14 +37,6 @@
 
 **ARGO FloatChat** is an end-to-end platform that democratizes access to oceanographic data through AI. It combines data extraction, processing, storage, and intelligent querying capabilities to make ARGO float data accessible to researchers, students, and ocean enthusiasts worldwide.
 
-### 🎥 Demo
-
-> **Note:** Add a demo GIF or screenshot here showcasing the FloatChat interface in action
-
-```
-[Your Demo GIF/Screenshot Here]
-```
-
 ## ✨ Key Features
 
 <table>

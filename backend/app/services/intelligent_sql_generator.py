@@ -267,20 +267,40 @@ class IntelligentSQLGenerator:
             year_matches = re.findall(r'\b(19\d{2}|20\d{2})\b', user_query)
             unique_years = sorted(list({int(y) for y in year_matches}))
             logger.info(f"Year comparison detection: query='{user_query}', years_found={year_matches}, unique_years={unique_years}")
-            
-            # Only trigger year comparison for explicit year vs year queries (like "2022 vs 2023" or "compare 2022 and 2023")
-            if (len(unique_years) >= 2 and 
+
+            # Detect month names in query
+            month_map = {
+                'january': 1, 'february': 2, 'march': 3, 'april': 4,
+                'may': 5, 'june': 6, 'july': 7, 'august': 8,
+                'september': 9, 'october': 10, 'november': 11, 'december': 12
+            }
+            detected_month = None
+            for month_name, month_num in month_map.items():
+                if month_name in user_query.lower():
+                    detected_month = month_num
+                    break
+
+            # Only trigger year comparison for explicit year vs year queries (like "2022 vs 2023" or "july 2022 vs july 2023")
+            # Allow queries with month names IF they have multiple years (for month+year comparisons)
+            should_use_year_comparison = (
+                len(unique_years) >= 2 and
                 any(w in user_query.lower() for w in ["compare", "versus", "vs", "compare between", "between"]) and
-                not any(w in user_query.lower() for w in ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]) and
-                not any(w in user_query.lower() for w in ["bar chart", "bar graph", "chart", "graph"])):
+                not any(w in user_query.lower() for w in ["bar chart", "bar graph", "chart", "graph"])
+            )
+
+            if should_use_year_comparison:
                 years_clause = ", ".join(str(y) for y in unique_years[:2])
                 # Check if this is an equatorial query
                 is_equatorial = any(term in user_query.lower() for term in ['equator', 'equatorial', 'near the equator'])
+
+                # Build month filter if a specific month is mentioned
+                month_filter = f"AND EXTRACT(MONTH FROM profile_date) = {detected_month}\n                    " if detected_month else ""
                 
                 if is_equatorial:
                     # Add equatorial filter (latitude between -5 and 5 degrees)
+                    month_desc = f" for {list(month_map.keys())[detected_month-1].title()}" if detected_month else ""
                     comparison_sql = f"""
-                    (SELECT 
+                    (SELECT
                         EXTRACT(YEAR FROM profile_date) AS year,
                         profile_id,
                         float_id,
@@ -292,13 +312,13 @@ class IntelligentSQLGenerator:
                         pressure[1] AS surface_pressure
                     FROM argo_profiles
                     WHERE EXTRACT(YEAR FROM profile_date) = {unique_years[1]}
-                    AND latitude BETWEEN -5 AND 5
-                    AND temperature IS NOT NULL 
+                    {month_filter}AND latitude BETWEEN -5 AND 5
+                    AND temperature IS NOT NULL
                     AND salinity IS NOT NULL
                     ORDER BY profile_date DESC
                     )
                     UNION ALL
-                    (SELECT 
+                    (SELECT
                         EXTRACT(YEAR FROM profile_date) AS year,
                         profile_id,
                         float_id,
@@ -310,25 +330,26 @@ class IntelligentSQLGenerator:
                         pressure[1] AS surface_pressure
                     FROM argo_profiles
                     WHERE EXTRACT(YEAR FROM profile_date) = {unique_years[0]}
-                    AND latitude BETWEEN -5 AND 5
-                    AND temperature IS NOT NULL 
+                    {month_filter}AND latitude BETWEEN -5 AND 5
+                    AND temperature IS NOT NULL
                     AND salinity IS NOT NULL
                     ORDER BY profile_date DESC
                     )
                     ORDER BY year DESC, profile_date DESC
                     """
-                    logger.info(f"Generated equatorial year comparison SQL for years {unique_years[0]} and {unique_years[1]}")
-                    
+                    logger.info(f"Generated equatorial year comparison SQL for years {unique_years[0]} and {unique_years[1]}{month_desc}")
+
                     return {
                         "sql_query": comparison_sql.strip(),
-                        "explanation": f"Equatorial year comparison for years: {', '.join(str(y) for y in unique_years[:2])} (latitude -5° to +5°)",
-                        "estimated_results": f"Profile data for {unique_years[0]} and {unique_years[1]} near the equator",
+                        "explanation": f"Equatorial year comparison for years: {', '.join(str(y) for y in unique_years[:2])}{month_desc} (latitude -5° to +5°)",
+                        "estimated_results": f"Profile data for {unique_years[0]} and {unique_years[1]}{month_desc} near the equator",
                         "parameters_used": ["profile_date", "temperature", "salinity", "latitude"],
                         "generation_method": "year_comparison_direct"
                     }
                 else:
+                    month_desc = f" for {list(month_map.keys())[detected_month-1].title()}" if detected_month else ""
                     comparison_sql = f"""
-                    (SELECT 
+                    (SELECT
                         EXTRACT(YEAR FROM profile_date) AS year,
                         profile_id,
                         float_id,
@@ -340,12 +361,12 @@ class IntelligentSQLGenerator:
                         pressure[1] AS surface_pressure
                     FROM argo_profiles
                     WHERE EXTRACT(YEAR FROM profile_date) = {unique_years[1]}
-                    AND temperature IS NOT NULL 
+                    {month_filter}AND temperature IS NOT NULL
                     AND salinity IS NOT NULL
                     ORDER BY profile_date DESC
                     )
                     UNION ALL
-                    (SELECT 
+                    (SELECT
                         EXTRACT(YEAR FROM profile_date) AS year,
                         profile_id,
                         float_id,
@@ -357,7 +378,7 @@ class IntelligentSQLGenerator:
                         pressure[1] AS surface_pressure
                     FROM argo_profiles
                     WHERE EXTRACT(YEAR FROM profile_date) = {unique_years[0]}
-                    AND temperature IS NOT NULL 
+                    {month_filter}AND temperature IS NOT NULL
                     AND salinity IS NOT NULL
                     ORDER BY profile_date DESC
                     )
@@ -365,8 +386,8 @@ class IntelligentSQLGenerator:
                     """
                     return {
                         "sql_query": comparison_sql.strip(),
-                        "explanation": f"Yearly comparison with oceanographic data for years: {', '.join(str(y) for y in unique_years[:2])}",
-                        "estimated_results": "Profile data for requested years with surface measurements",
+                        "explanation": f"Yearly comparison with oceanographic data for years: {', '.join(str(y) for y in unique_years[:2])}{month_desc}",
+                        "estimated_results": f"Profile data for requested years{month_desc} with surface measurements",
                         "parameters_used": ["profile_date", "temperature", "salinity"],
                         "generation_method": "year_comparison_direct"
                     }

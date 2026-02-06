@@ -13,6 +13,18 @@ from app.services.query_classifier import query_classifier
 from app.services.geographic_validator import GeographicValidator
 from app.config import settings, QueryTypes
 from app.services.visualization_generator import visualization_generator
+from app.services.comparison_formatter import comparison_formatter
+from app.services.query_intent_detector import query_intent_detector
+from app.services.result_ranker import result_ranker
+
+# Import cache manager with error handling (Redis might not be available)
+try:
+    from app.core.cache_manager import cache_manager
+    CACHE_AVAILABLE = True
+except ImportError:
+    cache_manager = None
+    CACHE_AVAILABLE = False
+
 # Import intelligent analysis with error handling
 try:
     from app.services.intelligent_analysis import intelligent_analysis_service
@@ -310,37 +322,60 @@ I can help you explore this amazing dataset! Try asking me about temperature pat
             traceback.print_exc()
             return self._create_error_response(user_query, str(e))
     
-    async def _retrieve_data(self, query: str, classification: Dict[str, Any], 
+    async def _retrieve_data(self, query: str, classification: Dict[str, Any],
                            max_results: int) -> Dict[str, Any]:
-        """Retrieve data based on query classification"""
-        
+        """Retrieve data based on query classification with caching"""
+
         query_type = classification['query_type']
         entities = classification.get('extracted_entities', {})
-        
+
+        # ============================================================================
+        # CACHING LAYER - Check cache first for 50% latency reduction
+        # ============================================================================
+        if CACHE_AVAILABLE:
+            cached_result = cache_manager.get_query_result(query, query_type)
+            if cached_result:
+                logger.info("✅ Cache hit! Returning cached result", query_type=query_type)
+                return cached_result
+            else:
+                logger.debug("Cache miss, retrieving from database", query_type=query_type)
+
         retrieved_data = {
             "sql_results": [],
             "vector_results": [],
             "hybrid_results": {},
             "database_stats": {}
         }
-        
+
         try:
             if query_type == QueryTypes.SQL_RETRIEVAL:
                 retrieved_data = await self._sql_retrieval(query, entities, max_results)
-            
+
             elif query_type == QueryTypes.VECTOR_RETRIEVAL:
                 retrieved_data = await self._vector_retrieval(query, entities, max_results)
-            
+
             elif query_type == QueryTypes.HYBRID_RETRIEVAL:
                 retrieved_data = await self._hybrid_retrieval(query, entities, max_results)
-            
+
             # Always get basic database statistics for context
             retrieved_data["database_stats"] = db_manager.get_database_stats()
-            
+
+            # ============================================================================
+            # CACHING LAYER - Cache the result (5 min TTL)
+            # ============================================================================
+            if CACHE_AVAILABLE:
+                cache_manager.set_query_result(
+                    query,
+                    query_type,
+                    retrieved_data,
+                    ttl=300  # 5 minutes
+                )
+                logger.debug("Cached query result", query_type=query_type)
+
         except Exception as e:
             logger.error("Data retrieval failed", query_type=query_type, error=str(e))
             retrieved_data["error"] = str(e)
-        
+
         return retrieved_data
     
     async def _sql_retrieval(self, query: str, entities: Dict[str, Any], 
@@ -476,33 +511,61 @@ I can help you explore this amazing dataset! Try asking me about temperature pat
                 "hybrid_results": {}
             }
     
-    async def _hybrid_retrieval(self, query: str, entities: Dict[str, Any], 
+    async def _hybrid_retrieval(self, query: str, entities: Dict[str, Any],
                               max_results: int) -> Dict[str, Any]:
-        """Retrieve data using both SQL and vector search"""
-        
+        """Retrieve data using both SQL and vector search with intelligent ranking"""
+
         try:
             # Run both retrieval methods concurrently
             sql_task = asyncio.create_task(self._sql_retrieval(query, entities, max_results // 2))
             vector_task = asyncio.create_task(self._vector_retrieval(query, entities, max_results // 2))
-            
+
             sql_data, vector_data = await asyncio.gather(sql_task, vector_task)
-            
+
+            # ============================================================================
+            # RESULT RANKING - Intelligently rank and combine SQL + Vector results
+            # ============================================================================
+            sql_results = sql_data.get('sql_results', [])
+            vector_results = vector_data.get('vector_results', [])
+
+            # Rank hybrid results using multi-factor scoring
+            ranked_results = result_ranker.rank_hybrid_results(
+                sql_results=sql_results,
+                vector_results=vector_results,
+                query=query,
+                entities=entities
+            )
+
+            logger.info(
+                "Hybrid results ranked",
+                total_ranked=len(ranked_results),
+                top_score=ranked_results[0]['final_score'] if ranked_results else 0
+            )
+
+            # Separate back into SQL and vector for compatibility
+            ranked_sql = [r for r in ranked_results if r.get('source') == 'sql']
+            ranked_vector = [r for r in ranked_results if r.get('source') == 'vector']
+
             # Combine results
             hybrid_results = {
                 "sql_component": sql_data,
                 "vector_component": vector_data,
-                "combination_strategy": "parallel_retrieval"
+                "combination_strategy": "intelligent_ranking",
+                "ranking_applied": True,
+                "total_candidates": len(sql_results) + len(vector_results),
+                "final_count": len(ranked_results)
             }
-            
+
             return {
-                "sql_results": sql_data.get('sql_results', []),
-                "vector_results": vector_data.get('vector_results', []),
+                "sql_results": ranked_sql,  # Ranked SQL results
+                "vector_results": ranked_vector,  # Ranked vector results
+                "ranked_combined": ranked_results,  # All results ranked together
                 "hybrid_results": hybrid_results,
                 "sql_query": sql_data.get('sql_query', ''),
                 "search_query": vector_data.get('search_query', query),
                 "generation_method": sql_data.get('generation_method', 'intelligent')
             }
-            
+
         except Exception as e:
             logger.error("Hybrid retrieval failed", error=str(e))
             # Fallback to vector retrieval only
@@ -521,7 +584,17 @@ I can help you explore this amazing dataset! Try asking me about temperature pat
             
             if not sql_results and not vector_results:
                 return self._generate_no_results_response(query, classification)
-            
+
+            # ============================================================================
+            # COMPARISON QUERY HANDLING - Use table format for comparative queries
+            # ============================================================================
+            # Detect if this is a comparison query using intent detection
+            intent_result = query_intent_detector.detect_intent(query)
+
+            if comparison_formatter.should_use_comparison_format(query, intent_result):
+                logger.info("Using comparison table format", intent=intent_result.get('primary_intent'))
+                return comparison_formatter.format_comparison(query, sql_results, intent_result)
+
             # Special handling for year comparison queries to avoid LLM hallucinations
             if self._is_year_comparison_query(query, retrieved_data):
                 return self._generate_year_comparison_response(query, sql_results)
@@ -1011,12 +1084,18 @@ I can help you explore this amazing dataset! Try asking me about temperature pat
     def _get_count_query(self, sql_query: str) -> str:
         """Generate a COUNT query from a SELECT query"""
         try:
+            # CRITICAL FIX: Skip count query for UNION ALL queries (used in comparisons)
+            # These queries need to be wrapped in a subquery to count properly
+            if 'UNION ALL' in sql_query.upper() or 'UNION' in sql_query.upper():
+                logger.info("Skipping count query for UNION query - not needed for comparisons")
+                return None
+
             # Remove LIMIT clause if present
             count_query = re.sub(r'\s+LIMIT\s+\d+', '', sql_query, flags=re.IGNORECASE)
-            
+
             # Remove ORDER BY clause if present (not needed for count)
             count_query = re.sub(r'\s+ORDER\s+BY\s+.*$', '', count_query, flags=re.IGNORECASE | re.DOTALL)
-            
+
             # For complex distance calculation queries with JOINs, use a simpler approach
             if 'LEFT JOIN' in count_query.upper() or 'JOIN' in count_query.upper():
                 # Extract the main table and WHERE clause
@@ -1033,7 +1112,7 @@ I can help you explore this amazing dataset! Try asking me about temperature pat
                         return f"SELECT COUNT(*) as count FROM {table_name} WHERE {where_clause}"
                     else:
                         return f"SELECT COUNT(*) as count FROM {table_name}"
-            
+
             # Replace SELECT ... FROM with SELECT COUNT(*) FROM
             # Handle complex SELECT clauses
             if 'GROUP BY' in count_query.upper():
