@@ -1524,6 +1524,249 @@ st.markdown("""
             opacity: 1;
         }
     }
+
+    /* Enhanced Scrollbar Styling */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: rgba(15, 23, 42, 0.4);
+        border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, var(--primary-blue), var(--primary-indigo));
+        border-radius: 10px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, var(--primary-indigo), var(--primary-purple));
+        background-clip: padding-box;
+    }
+
+    /* Floating Animation for Icons */
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+    }
+
+    .float-animation {
+        animation: float 3s ease-in-out infinite;
+    }
+
+    /* Shimmer Effect for Loading States */
+    @keyframes shimmer {
+        0% { background-position: -1000px 0; }
+        100% { background-position: 1000px 0; }
+    }
+
+    .shimmer {
+        background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.05) 0%,
+            rgba(255, 255, 255, 0.15) 50%,
+            rgba(255, 255, 255, 0.05) 100%
+        );
+        background-size: 1000px 100%;
+        animation: shimmer 2s infinite;
+    }
+
+    /* Card Glow Effect */
+    .glow-card {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .glow-card::after {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(
+            circle,
+            rgba(6, 182, 212, 0.2) 0%,
+            transparent 70%
+        );
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .glow-card:hover::after {
+        opacity: 1;
+    }
+
+    /* Success/Error Message Animations */
+    @keyframes slideInFromTop {
+        from {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .success-message {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        color: var(--success-green);
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        animation: slideInFromTop 0.3s ease-out;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+    }
+
+    .error-message {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1));
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: var(--error-red);
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        animation: slideInFromTop 0.3s ease-out;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+    }
+
+    /* Enhanced Tooltip Styling */
+    .tooltip {
+        position: relative;
+        display: inline-block;
+    }
+
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        background: linear-gradient(135deg, #1e293b, #334155);
+        color: white;
+        text-align: center;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: opacity 0.3s, visibility 0.3s;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        white-space: nowrap;
+    }
+
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    /* Data Table Enhancements */
+    .stDataFrame {
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .stDataFrame th {
+        background: linear-gradient(135deg, #1e293b, #334155) !important;
+        color: var(--primary-blue) !important;
+        font-weight: 600 !important;
+        padding: 1rem !important;
+    }
+
+    .stDataFrame td {
+        padding: 0.75rem !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+    }
+
+    .stDataFrame tr:hover {
+        background: rgba(6, 182, 212, 0.05) !important;
+    }
+
+    /* Chart Container Enhancements */
+    .chart-container {
+        background: rgba(30, 41, 59, 0.6);
+        backdrop-filter: blur(20px);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        transition: all 0.3s ease;
+    }
+
+    .chart-container:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        border-color: rgba(6, 182, 212, 0.3);
+    }
+
+    /* Quick Query Cards Enhancement */
+    .quick-query-card {
+        background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(59, 130, 246, 0.1));
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin: 0.5rem 0;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+    }
+
+    .quick-query-card:hover {
+        transform: translateX(8px) scale(1.02);
+        border-color: rgba(59, 130, 246, 0.4);
+        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+        background: linear-gradient(135deg, rgba(14, 165, 233, 0.15), rgba(59, 130, 246, 0.15));
+    }
+
+    /* Sidebar Enhancements */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    [data-testid="stSidebar"] .metric-card {
+        background: linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(59, 130, 246, 0.1));
+        border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .header-title {
+            font-size: 1.5rem;
+        }
+
+        .header-subtitle {
+            font-size: 0.85rem;
+        }
+
+        .user-message,
+        .assistant-message {
+            max-width: 95%;
+            padding: 1rem 1.5rem;
+        }
+
+        .metric-card {
+            padding: 1rem;
+        }
+    }
+
+    /* Print Styles */
+    @media print {
+        .stButton,
+        [data-testid="stSidebar"],
+        .header-container {
+            display: none !important;
+        }
+
+        .assistant-message {
+            page-break-inside: avoid;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
